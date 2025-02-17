@@ -7,6 +7,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
 import android.os.StrictMode
@@ -18,6 +19,7 @@ import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
+import android.webkit.SslErrorHandler
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -54,13 +56,13 @@ class MainActivity : AppCompatActivity() {
         val applicantId = onfidoSdk.getApplicantId()
         val sdkToken = onfidoSdk.getSdkToken(applicantId)
         val workflowRunId = onfidoSdk.getWorkflowRunId(applicantId)
-
+//   "workflowRunId": "edef9dd5-e8a2-45a2-ba9f-411f7d23c7da"
         onfidoSdk.initSdk(
             """{
-                    "token": "$sdkToken",
-                    "workflowRunId": "$workflowRunId"
+                    "token": "Insert Token here!",
+                    "steps": ["document","face"]
             }""".trimIndent(), EventHandler(
-                onError = { showMessage("Error") },
+                onError = { e -> showMessage("Error: ${e.toString()}") },
                 onComplete = { showMessage("Complete") }
             )
         )
@@ -70,6 +72,8 @@ class MainActivity : AppCompatActivity() {
             settings.loadWithOverviewMode = true
             settings.allowFileAccess = true
             settings.mediaPlaybackRequiresUserGesture = false
+            settings.domStorageEnabled = true
+            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             webViewClient = Client()
             webChromeClient = ChromeClient()
 
@@ -78,7 +82,7 @@ class MainActivity : AppCompatActivity() {
             addJavascriptInterface(onfidoSdk.getSdkCallbackJsInterface(), "sdk")
             loadUrl("https://sdk.onfido.com/blank")
         }
-
+        WebView.setWebContentsDebuggingEnabled(true)
         requestPermissions(this)
     }
 
@@ -94,7 +98,7 @@ class MainActivity : AppCompatActivity() {
     inner class ChromeClient : WebChromeClient() {
         override fun onPermissionRequest(request: PermissionRequest) {
             val permissions = arrayOf(
-                PermissionRequest.RESOURCE_AUDIO_CAPTURE,
+              //  PermissionRequest.RESOURCE_AUDIO_CAPTURE,
                 PermissionRequest.RESOURCE_VIDEO_CAPTURE
             )
             request.grant(permissions)
@@ -158,21 +162,34 @@ class MainActivity : AppCompatActivity() {
     }
 
     inner class Client : WebViewClient() {
+
+        override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+            handler?.proceed()
+        }
+
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
-            val src = configuration.url
-                ?: "https://sdk.onfido.com/capture/core/${configuration.version}/Onfido.iife.js"
+            val src = "https://sdk.onfido.com/v14"
+            val cssFileUrl = "https://sdk.onfido.com/v13/style.css"
+              //  configuration.url
+              //  ?: "https://sdk.onfido.com/capture/core/14/Onfido.iife.js"
 
             // blank page has been loaded, now inject the sdk
             webView.evaluateJavascript(
                 """
             (() => {
+                 // Inject CSS file
+                // const link = document.createElement('link');
+                // link.rel = 'stylesheet';
+                // link.href = '';
+               //  document.head.appendChild(link);
                 const script = document.createElement('script');
                 script.src = "$src";
                 script.onload = () => sdk.loadComplete();
                 script.onerror = (e) => {
-                    console.error(e);
-                    sdk.loadError(e.message || '')
+                   alert("error error", e.message);
+                   // console.error(e);
+                   // sdk.loadError(e.message || '')
                 };
                 document.head.appendChild(script);
             })()
